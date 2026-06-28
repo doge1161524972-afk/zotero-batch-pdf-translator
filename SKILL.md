@@ -1,9 +1,9 @@
 ---
-name: zotero-pdf2zh-bilingual
-description: Batch translate PDFs from Zotero collections through a local zotero-pdf2zh/pdf2zh service, process one paper at a time to avoid batch failures, attach bilingual compare outputs back to Zotero Desktop, and verify or repair the bilingual layout so Chinese appears on the left and English on the right. Use when the user asks to translate Zotero folders/collections with pdf2zh, fdf2zh/pdf2zh bilingual compare, add translated PDFs as Zotero attachments, or fix Chinese-right/English-left compare PDFs.
+name: zotero-batch-pdf-translator
+description: Batch translate PDFs from Zotero collections through a local zotero-pdf2zh/pdf2zh service, process one paper at a time to avoid batch failures, attach bilingual compare outputs back to Zotero Desktop, and verify or repair the compare layout so Chinese appears on the left and English on the right. Use when the user asks to batch translate Zotero folders/collections with pdf2zh, fdf2zh/pdf2zh bilingual compare, add translated PDFs as Zotero attachments, or fix Chinese-right/English-left compare PDFs.
 ---
 
-# Zotero Pdf2zh Bilingual
+# Zotero Batch PDF Translator
 
 ## Overview
 
@@ -14,6 +14,7 @@ Use this skill for Zotero-backed pdf2zh batch work where reliability matters mor
 1. Check Zotero and pdf2zh readiness.
    - Use the Zotero skill/helper first if available to confirm `http://127.0.0.1:23119`.
    - Check the local pdf2zh service at `http://127.0.0.1:8890/health`.
+   - Treat `127.0.0.1` as the installer's own computer. If their Zotero or pdf2zh ports differ, pass `--zotero-base` and `--pdf2zh-base`.
    - Pass `--output-dir` when the local pdf2zh server writes translated files outside the current working directory.
 
 2. Identify collection keys.
@@ -41,7 +42,7 @@ Translate two collections and create a manifest:
 
 ```powershell
 $py = 'C:\path\to\python.exe'
-$skill = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'skills\zotero-pdf2zh-bilingual' } else { Join-Path $HOME '.codex\skills\zotero-pdf2zh-bilingual' }
+$skill = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'skills\zotero-batch-pdf-translator' } else { Join-Path $HOME '.codex\skills\zotero-batch-pdf-translator' }
 & $py (Join-Path $skill 'scripts\zotero_pdf2zh_batch.py') `
   --collection brain=ISTDU5JI `
   --collection review=ZWG4XSS6 `

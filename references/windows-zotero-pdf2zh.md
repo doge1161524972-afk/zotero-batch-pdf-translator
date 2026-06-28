@@ -9,6 +9,10 @@ Use these notes when the main workflow fails or the environment is unclear.
 - pdf2zh service: `http://127.0.0.1:8890`
 - pdf2zh health: `http://127.0.0.1:8890/health`
 
+`127.0.0.1` is the loopback address for the installer's own computer. These
+ports are common defaults, not global addresses. If the user configured Zotero
+or pdf2zh differently, pass `--zotero-base` and `--pdf2zh-base`.
+
 Set loopback proxy bypass before local HTTP calls:
 
 ```powershell

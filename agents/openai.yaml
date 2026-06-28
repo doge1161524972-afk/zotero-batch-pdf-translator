@@ -1,4 +1,4 @@
 interface:
-  display_name: "Zotero PDF2zh Bilingual"
-  short_description: "Batch translate Zotero PDFs with bilingual layout checks"
-  default_prompt: "Use $zotero-pdf2zh-bilingual to translate selected Zotero collections with pdf2zh, attach outputs, and verify Chinese-left bilingual PDFs."
+  display_name: "Zotero Batch PDF Translator"
+  short_description: "Batch translate Zotero PDFs and attach verified outputs"
+  default_prompt: "Use $zotero-batch-pdf-translator to batch translate selected Zotero collections with pdf2zh, attach outputs, and verify Chinese-left compare PDFs."

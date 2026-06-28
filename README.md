@@ -1,4 +1,4 @@
-# Zotero PDF2zh Bilingual Skill
+# Zotero Batch PDF Translator
 
 A Codex skill for batch-translating PDFs from Zotero collections with a local
 pdf2zh/zotero-pdf2zh service.
@@ -26,14 +26,15 @@ Chinese translation | English original
 ## Requirements
 
 - Windows for the included Zotero Desktop attachment automation script.
-- Zotero Desktop with the local API enabled, usually at `http://127.0.0.1:23119`.
-- A local pdf2zh or zotero-pdf2zh service, usually at `http://127.0.0.1:8890`.
+- Zotero Desktop with the local API enabled, often at `http://127.0.0.1:23119`.
+- A local pdf2zh or zotero-pdf2zh service, often at `http://127.0.0.1:8890`.
 - Python 3.10+ with `PyMuPDF` (`fitz`) available.
 - PowerShell for `scripts/attach_outputs_to_zotero.ps1`.
 
-The scripts default to the author's local pdf2zh paths in examples, but all
-service URLs, output folders, and manifests are configurable by command-line
-arguments.
+`127.0.0.1` is not the author's public IP address. It is the loopback address
+for each installer's own computer. If Zotero or pdf2zh uses different ports,
+configure them with `--zotero-base` and `--pdf2zh-base`. Output folders and
+manifests are also configurable.
 
 ## Installation
 
@@ -41,14 +42,14 @@ Clone the repository directly into your Codex skills folder:
 
 ```powershell
 $skills = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'skills' } else { Join-Path $HOME '.codex\skills' }
-git clone https://github.com/doge1161524972-afk/zotero-pdf2zh-bilingual-skill.git (Join-Path $skills 'zotero-pdf2zh-bilingual')
+git clone https://github.com/doge1161524972-afk/zotero-batch-pdf-translator.git (Join-Path $skills 'zotero-batch-pdf-translator')
 ```
 
 If you download the repo as a ZIP, extract it so the final folder contains
 `SKILL.md` at its root:
 
 ```text
-.../skills/zotero-pdf2zh-bilingual/SKILL.md
+.../skills/zotero-batch-pdf-translator/SKILL.md
 ```
 
 ## Usage
@@ -57,7 +58,7 @@ Translate Zotero collections:
 
 ```powershell
 $py = 'C:\path\to\python.exe'
-$skill = Join-Path $env:CODEX_HOME 'skills\zotero-pdf2zh-bilingual'
+$skill = Join-Path $env:CODEX_HOME 'skills\zotero-batch-pdf-translator'
 & $py (Join-Path $skill 'scripts\zotero_pdf2zh_batch.py') `
   --collection review=ZWG4XSS6 `
   --pdf2zh-base 'http://127.0.0.1:8890' `
