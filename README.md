@@ -41,7 +41,7 @@ Clone the repository directly into your Codex skills folder:
 
 ```powershell
 $skills = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'skills' } else { Join-Path $HOME '.codex\skills' }
-git clone https://github.com/YOUR-USER/zotero-pdf2zh-bilingual-skill.git (Join-Path $skills 'zotero-pdf2zh-bilingual')
+git clone https://github.com/doge1161524972-afk/zotero-pdf2zh-bilingual-skill.git (Join-Path $skills 'zotero-pdf2zh-bilingual')
 ```
 
 If you download the repo as a ZIP, extract it so the final folder contains
