@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import time
 import urllib.parse
@@ -104,7 +105,13 @@ def compare_candidates(pdf_path, output_dir):
         output_dir / f"{stem}.compare.pdf",
         output_dir / f"{stem}.no_watermark.zh-CN.compare.pdf",
         output_dir / f"{stem}.zh-CN.compare.pdf",
+        output_dir / f"{stem}.no_watermark.zh-CN.LR_compare.pdf",
+        output_dir / f"{stem}.zh-CN.LR_compare.pdf",
         output_dir / f"{stem}.no_watermark.zh-CN.TB_compare.pdf",
+        output_dir / f"{stem}.no_watermark.zh-CN.dual.pdf",
+        output_dir / f"{stem}.zh-CN.dual.pdf",
+        output_dir / f"{stem}.no_watermark.zh-CN.LR_dual.pdf",
+        output_dir / f"{stem}.zh-CN.LR_dual.pdf",
     ]
 
 
@@ -113,6 +120,8 @@ def existing_compare(pdf_path, output_dir):
         if candidate.exists() and candidate.stat().st_size > 0:
             return candidate
     matches = list(output_dir.glob(f"{pdf_path.stem}*compare*.pdf"))
+    if not matches:
+        matches = list(output_dir.glob(f"{pdf_path.stem}*dual*.pdf"))
     return matches[0] if matches else None
 
 
@@ -135,6 +144,55 @@ def translate_one(pdf2zh_base, pdf_path, args):
         "disableGlossary": args.disable_glossary,
     }
     return api_json(f"{pdf2zh_base}/translate", payload, timeout=args.translate_timeout)
+
+
+def scanned_failure(text):
+    return "scanned pdf detected" in (text or "").lower()
+
+
+def translate_one_ocr_cli(pdf_path, args):
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    exe = Path(args.pdf2zh_next_exe)
+    service = args.next_service or "deepseek"
+    command = [
+        str(exe),
+        str(pdf_path),
+        f"--{service}",
+        "--qps", str(args.qps),
+        "--output", str(output_dir),
+        "--lang-in", args.source_lang,
+        "--lang-out", args.target_lang,
+        "--watermark-output-mode", "no_watermark",
+        "--pool-max-workers", str(args.pool_size),
+        "--skip-scanned-detection",
+        "--auto-enable-ocr-workaround",
+    ]
+    if args.config_file:
+        command.extend(["--config-file", args.config_file])
+    if args.no_mono:
+        command.append("--no-mono")
+    log_path = Path(args.report).with_suffix(f".{pdf_path.stem}.ocr_retry.log")
+    with log_path.open("w", encoding="utf-8", errors="replace") as log:
+        result = subprocess.run(
+            command,
+            cwd=str(output_dir),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=args.translate_timeout,
+        )
+    output = existing_compare(pdf_path, output_dir)
+    if result.returncode == 0 and output:
+        return {"status": "translated_ocr_retry", "output": str(output), "ocr_retry_log": str(log_path)}
+    tail = ""
+    if log_path.exists():
+        tail = "\n".join(log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-20:])
+    return {
+        "status": "error",
+        "error": f"OCR retry failed with exit {result.returncode}: {tail}",
+        "ocr_retry_log": str(log_path),
+    }
 
 
 def wait_for_file_task(pdf2zh_base, file_name, max_seconds):
@@ -182,6 +240,30 @@ def should_swap(side_scores):
     return side_scores["right"]["cjk"] > side_scores["left"]["cjk"]
 
 
+def is_probably_alternating_page_dual(path, source_path=None):
+    try:
+        with fitz.open(path) as translated:
+            translated_pages = translated.page_count
+            if translated_pages < 2 or translated_pages % 2:
+                return False
+            if source_path:
+                try:
+                    with fitz.open(source_path) as source:
+                        if translated_pages == source.page_count * 2:
+                            return True
+                except Exception:
+                    pass
+            first = count_text(translated[0].get_text())
+            second = count_text(translated[1].get_text())
+    except Exception:
+        return False
+    first_is_english = first["latin"] > max(first["cjk"] * 2, 80)
+    second_is_chinese = second["cjk"] > max(second["latin"] // 3, 80)
+    first_is_chinese = first["cjk"] > max(first["latin"] // 3, 80)
+    second_is_english = second["latin"] > max(second["cjk"] * 2, 80)
+    return (first_is_english and second_is_chinese) or (first_is_chinese and second_is_english)
+
+
 def swap_compare_pdf_sides(src_path, out_path):
     src_path = Path(src_path)
     out_path = Path(out_path)
@@ -213,6 +295,10 @@ def backup_path_for(path, backup_dir):
 
 
 def ensure_chinese_left(path, backup_root):
+    if is_probably_alternating_page_dual(path):
+        raise RuntimeError(
+            "alternating-page dual PDF detected; rebuild or regenerate as left-Chinese/right-English before attaching"
+        )
     before = score_pdf_sides(path)
     if not should_swap(before):
         return {"status": "already_left", "before": before, "after": before}
@@ -238,6 +324,32 @@ def ensure_chinese_left(path, backup_root):
 
 def child_has_filename(children, filename):
     return any((child.get("data", {}).get("filename") or "") == filename for child in children)
+
+
+def child_with_filename(children, filename):
+    for child in children:
+        data = child.get("data", {})
+        if (data.get("filename") or "") == filename:
+            return child
+    return None
+
+
+def title_words(text):
+    return re.findall(r"[a-z0-9]+", (text or "").lower())
+
+
+def title_matches_item(row, child):
+    child_data = child.get("data", {}) if child else {}
+    parent_title = row.get("title") or ""
+    child_title = child_data.get("title") or ""
+    filename = child_data.get("filename") or ""
+    item_key = row.get("item_key") or ""
+    parent_head = " ".join(title_words(parent_title)[:5])
+    child_words = " ".join(title_words(child_title))
+    return (
+        bool(parent_head and parent_head in child_words)
+        or bool(item_key and filename.startswith(f"zotero_{item_key}_"))
+    )
 
 
 def save_report(path, rows):
@@ -279,6 +391,7 @@ def verify_rows(args, rows):
     bad_layout = []
     missing_outputs = []
     missing_attachments = []
+    title_mismatches = []
     verified = []
     for row in rows:
         if not row.get("source_pdf"):
@@ -290,21 +403,34 @@ def verify_rows(args, rows):
         if not output or not output.exists():
             missing_outputs.append(row)
             continue
+        if is_probably_alternating_page_dual(output, row.get("source_pdf")):
+            bad_layout.append({**row, "output": str(output), "layout_error": "alternating_page_dual"})
+            continue
         scores = score_pdf_sides(output)
         if should_swap(scores):
             bad_layout.append({**row, "output": str(output), "side_scores": scores})
         children = get_children(args.zotero_base, row["item_key"])
-        if not child_has_filename(children, output.name):
+        child = child_with_filename(children, output.name)
+        if not child:
             missing_attachments.append({**row, "output": str(output)})
+        elif not title_matches_item(row, child):
+            title_mismatches.append({
+                **row,
+                "output": str(output),
+                "attachment_title": child.get("data", {}).get("title") or "",
+                "attachment_filename": child.get("data", {}).get("filename") or "",
+            })
         verified.append({**row, "output": str(output), "side_scores": scores})
     return {
         "items": len(rows),
         "verified_outputs": len(verified),
         "missing_outputs": len(missing_outputs),
         "missing_attachments": len(missing_attachments),
+        "title_mismatches": len(title_mismatches),
         "bad_layout": len(bad_layout),
         "missing_output_examples": missing_outputs[:5],
         "missing_attachment_examples": missing_attachments[:5],
+        "title_mismatch_examples": title_mismatches[:5],
         "bad_layout_examples": bad_layout[:5],
     }
 
@@ -339,6 +465,7 @@ def run_translation(args):
             print(f"{row['index']:02d}. DONE existing: {title} -> {output.name}", flush=True)
         else:
             print(f"{row['index']:02d}. START {title}", flush=True)
+            request_error = ""
             try:
                 response = translate_one(args.pdf2zh_base, source_path, args)
                 print(f"    response={response}", flush=True)
@@ -350,6 +477,7 @@ def run_translation(args):
                     row["status"] = "no_output"
                     print("    FAIL no compare output found", flush=True)
             except Exception as exc:
+                request_error = str(exc)
                 print(f"    REQUEST ERROR {type(exc).__name__}: {exc}", flush=True)
                 try:
                     wait_for_file_task(args.pdf2zh_base, source_path.name, args.translate_timeout)
@@ -362,8 +490,31 @@ def run_translation(args):
                 except Exception as wait_exc:
                     row.update({"status": "error", "error": f"{exc}; settlement: {wait_exc}"})
 
+            if (
+                args.ocr_retry
+                and row.get("status") in {"no_output", "error"}
+                and (row.get("status") == "no_output" or scanned_failure(request_error) or scanned_failure(row.get("error", "")))
+            ):
+                print("    OCR retry for scanned/old PDF", flush=True)
+                try:
+                    retry = translate_one_ocr_cli(source_path, args)
+                    row.update(retry)
+                    if row.get("output"):
+                        print(f"    OCR OK -> {Path(row['output']).name}", flush=True)
+                    else:
+                        print("    OCR failed", flush=True)
+                except Exception as retry_exc:
+                    row.update({
+                        "status": "error",
+                        "error": f"{row.get('error', '')}; OCR retry: {type(retry_exc).__name__}: {retry_exc}",
+                    })
+
         if args.ensure_chinese_left and row.get("output"):
-            fix = ensure_chinese_left(Path(row["output"]), backup_root)
+            try:
+                fix = ensure_chinese_left(Path(row["output"]), backup_root)
+            except Exception as exc:
+                fix = {"status": "error", "error": f"{type(exc).__name__}: {exc}"}
+                row["status"] = "bad_layout"
             row["layout_fix"] = fix
             print(f"    layout={fix['status']}", flush=True)
         report.append(row)
@@ -382,9 +533,11 @@ def main():
     parser.add_argument("--backup-root", default=str(DEFAULT_BACKUP_ROOT))
     parser.add_argument("--engine", default="pdf2zh_next")
     parser.add_argument("--next-service", default="siliconflowfree")
+    parser.add_argument("--pdf2zh-next-exe", default=os.environ.get("PDF2ZH_NEXT_EXE", "pdf2zh_next"))
+    parser.add_argument("--config-file", default=os.environ.get("PDF2ZH_CONFIG_FILE", ""))
     parser.add_argument("--source-lang", default="en")
     parser.add_argument("--target-lang", default="zh-CN")
-    parser.add_argument("--dual-mode", default="TB")
+    parser.add_argument("--dual-mode", default="LR")
     parser.add_argument("--qps", type=int, default=8)
     parser.add_argument("--pool-size", type=int, default=80)
     parser.add_argument("--translate-timeout", type=int, default=7200)
@@ -393,6 +546,7 @@ def main():
     parser.add_argument("--disable-glossary", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--skip-existing", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--ensure-chinese-left", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--ocr-retry", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -408,7 +562,13 @@ def main():
             rows = build_item_rows(args)
         summary = verify_rows(args, rows)
         print(json.dumps(summary, ensure_ascii=False, indent=2))
-        raise SystemExit(1 if summary["missing_outputs"] or summary["missing_attachments"] or summary["bad_layout"] else 0)
+        raise SystemExit(
+            1 if summary["missing_outputs"]
+            or summary["missing_attachments"]
+            or summary["title_mismatches"]
+            or summary["bad_layout"]
+            else 0
+        )
 
     report = run_translation(args)
     if args.json:

@@ -1,4 +1,4 @@
 interface:
   display_name: "Zotero Batch PDF Translator"
-  short_description: "Batch translate Zotero PDFs and attach verified outputs"
-  default_prompt: "Use $zotero-batch-pdf-translator to batch translate selected Zotero collections with pdf2zh, attach outputs, and verify Chinese-left compare PDFs."
+  short_description: "Batch translate Zotero PDFs with OCR retry and verified outputs"
+  default_prompt: "Use $zotero-batch-pdf-translator to batch translate selected Zotero collections with pdf2zh, retry old/scanned PDFs with OCR workaround, attach outputs, and verify Chinese-left compare PDFs."

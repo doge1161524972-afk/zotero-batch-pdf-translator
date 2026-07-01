@@ -4,9 +4,10 @@ A Codex skill for batch-translating PDFs from Zotero collections with a local
 pdf2zh/zotero-pdf2zh service.
 
 It is designed for the workflow where pdf2zh becomes unstable when too many
-papers are submitted at once. The skill translates one paper at a time, records
-a manifest, attaches the bilingual PDFs back to Zotero Desktop, and verifies the
-preferred compare layout:
+papers are submitted at once. The skill translates one paper at a time, retries
+old/scanned PDFs with pdf2zh-next OCR workaround, records a manifest, attaches
+the bilingual PDFs back to Zotero Desktop, and verifies the required compare
+layout:
 
 ```text
 Chinese translation | English original
@@ -17,11 +18,13 @@ Chinese translation | English original
 - Reads PDFs from Zotero collections through the Zotero local API.
 - Sends PDFs to a local pdf2zh service one by one.
 - Reuses existing compare outputs when present.
+- Retries old/scanned PDFs with `--skip-scanned-detection --auto-enable-ocr-workaround`.
 - Writes a JSON manifest for audit and attachment automation.
 - Checks whether bilingual compare PDFs are Chinese-left/English-right.
 - Swaps page halves in place, with backups, when pdf2zh produces the opposite layout.
+- Rejects alternating-page dual PDFs as final Zotero attachments.
 - Uses Zotero Desktop UI automation to attach outputs when the local API cannot create file attachments.
-- Verifies missing outputs, missing Zotero attachments, and bad compare layouts.
+- Verifies missing outputs, missing Zotero attachments, title/file mismatches, and bad compare layouts.
 
 ## Requirements
 
@@ -63,6 +66,8 @@ $skill = Join-Path $env:CODEX_HOME 'skills\zotero-batch-pdf-translator'
   --collection review=ZWG4XSS6 `
   --pdf2zh-base 'http://127.0.0.1:8890' `
   --output-dir 'D:\CodexApps\zotero-pdf2zh\server\translated' `
+  --pdf2zh-next-exe 'D:\CodexApps\zotero-pdf2zh\server\zotero-pdf2zh-next-venv\Scripts\pdf2zh_next.exe' `
+  --config-file 'D:\CodexApps\zotero-pdf2zh\server\config\config.toml' `
   --report '.\pdf2zh_zotero_batch_report.json'
 ```
 
@@ -91,7 +96,9 @@ Verify final state:
 ## Safety Notes
 
 - The source PDFs in Zotero are not modified.
+- Scanned/old literature retries may be rougher than normal text-PDF translations; keep them reported as OCR retried.
 - Translated compare PDFs are backed up before in-place side swapping.
+- Alternating-page dual PDFs must be regenerated or rebuilt into Chinese-left/English-right pages before attachment.
 - Zotero UI automation depends on screen coordinates; run `-WhatIf` first and keep Zotero visible.
 - If Zotero is already showing an old PDF tab, close and reopen that tab after replacement.
 - Do not commit translated papers, manifests containing private library titles, or Zotero storage paths.
