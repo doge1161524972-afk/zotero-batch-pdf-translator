@@ -60,6 +60,12 @@ class SideSwapTest(unittest.TestCase):
         self.assertTrue(batch.scanned_failure("Babeldoc translation error: Scanned PDF detected."))
         self.assertFalse(batch.scanned_failure("ordinary timeout"))
 
+    def test_zotero_key_validation_rejects_cloud_invalid_keys(self):
+        self.assertTrue(batch.is_valid_zotero_key("AIV5GKIM"))
+        self.assertFalse(batch.is_valid_zotero_key("IA0QWB2N"))
+        self.assertFalse(batch.is_valid_zotero_key("FFT15MT8"))
+        self.assertFalse(batch.is_valid_zotero_key("MU9B9AOE"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,6 +13,8 @@ Hard layout rule: deliver and attach only left-right bilingual PDFs with Chinese
 
 Hard OCR rule: old or scanned literature PDFs must get an OCR-workaround attempt before being marked failed. If pdf2zh/Babeldoc reports `Scanned PDF detected`, or an old PDF produces no output after scan detection, rerun through pdf2zh-next with scan detection skipped and OCR workaround enabled.
 
+Hard sync rule: translated attachments must have Zotero-server-valid item keys before the run is called complete. Zotero item keys are 8 characters drawn from `23456789ABCDEFGHIJKLMNPQRSTUVWXYZ`; keys containing `0`, `1`, or `O` can exist locally after a buggy attachment path but will fail Zotero sync with HTTP 400.
+
 ## Workflow
 
 1. Check Zotero and pdf2zh readiness.
@@ -39,7 +41,7 @@ Hard OCR rule: old or scanned literature PDFs must get an OCR-workaround attempt
 
 5. Verify completion.
    - Re-run the Python script with `--verify-only` to count items, attachments, missing outputs, and compare layout.
-   - Success requires zero missing translated attachments, zero title/file mismatches, zero alternating-page dual attachments, and zero compare PDFs where the right side has more Chinese than the left side.
+   - Success requires zero missing translated attachments, zero invalid Zotero attachment keys, zero title/file mismatches, zero alternating-page dual attachments, and zero compare PDFs where the right side has more Chinese than the left side.
    - Render or inspect at least one sample page visually when the user complained about layout.
 
 ## Commands
@@ -90,7 +92,7 @@ Never attach an alternating-page dual PDF as the final Zotero translation. A fil
 
 If pdf2zh produces English-left/Chinese-right output, do not retranslate first. Use the script's side-fix logic to swap page halves in place after backing up the file. The script checks CJK character counts on both halves of the first pages before and after the swap.
 
-Before attaching outputs to Zotero, verify each translated attachment title or filename maps to the parent Zotero item title. The final report must include title/file matching status and layout verification status.
+Before attaching outputs to Zotero, verify each translated attachment title or filename maps to the parent Zotero item title. The final report must include title/file matching status, Zotero key validity, and layout verification status.
 
 ## OCR Contract
 

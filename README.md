@@ -24,7 +24,7 @@ Chinese translation | English original
 - Swaps page halves in place, with backups, when pdf2zh produces the opposite layout.
 - Rejects alternating-page dual PDFs as final Zotero attachments.
 - Uses Zotero Desktop UI automation to attach outputs when the local API cannot create file attachments.
-- Verifies missing outputs, missing Zotero attachments, title/file mismatches, and bad compare layouts.
+- Verifies missing outputs, missing Zotero attachments, Zotero-sync-valid attachment keys, title/file mismatches, and bad compare layouts.
 
 ## Requirements
 
@@ -99,6 +99,7 @@ Verify final state:
 - Scanned/old literature retries may be rougher than normal text-PDF translations; keep them reported as OCR retried.
 - Translated compare PDFs are backed up before in-place side swapping.
 - Alternating-page dual PDFs must be regenerated or rebuilt into Chinese-left/English-right pages before attachment.
+- Zotero attachment keys must be sync-valid; local keys containing `0`, `1`, or `O` can trigger HTTP 400 during Zotero sync.
 - Zotero UI automation depends on screen coordinates; run `-WhatIf` first and keep Zotero visible.
 - If Zotero is already showing an old PDF tab, close and reopen that tab after replacement.
 - Do not commit translated papers, manifests containing private library titles, or Zotero storage paths.

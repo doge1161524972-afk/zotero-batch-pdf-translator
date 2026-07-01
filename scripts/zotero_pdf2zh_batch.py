@@ -19,6 +19,7 @@ DEFAULT_ZOTERO_BASE = "http://127.0.0.1:23119/api/users/0"
 DEFAULT_PDF2ZH_BASE = "http://127.0.0.1:8890"
 DEFAULT_OUTPUT_DIR = Path(os.environ.get("PDF2ZH_OUTPUT_DIR", "translated"))
 DEFAULT_BACKUP_ROOT = Path("tmp/pdf2zh_side_swap_backups")
+VALID_ZOTERO_KEY_RE = re.compile(r"^[23456789ABCDEFGHIJKLMNPQRSTUVWXYZ]{8}$")
 
 
 def api_json(url, data=None, timeout=30):
@@ -57,6 +58,10 @@ def get_file_path(zotero_base, attachment_key):
         file_url = response.read().decode("utf-8", errors="replace").strip()
     parsed = urllib.parse.urlparse(file_url)
     return Path(urllib.parse.unquote(parsed.path.lstrip("/")))
+
+
+def is_valid_zotero_key(key):
+    return bool(key and VALID_ZOTERO_KEY_RE.fullmatch(key))
 
 
 def is_translated_output(filename):
@@ -392,6 +397,7 @@ def verify_rows(args, rows):
     missing_outputs = []
     missing_attachments = []
     title_mismatches = []
+    invalid_attachment_keys = []
     verified = []
     for row in rows:
         if not row.get("source_pdf"):
@@ -413,13 +419,24 @@ def verify_rows(args, rows):
         child = child_with_filename(children, output.name)
         if not child:
             missing_attachments.append({**row, "output": str(output)})
-        elif not title_matches_item(row, child):
-            title_mismatches.append({
-                **row,
-                "output": str(output),
-                "attachment_title": child.get("data", {}).get("title") or "",
-                "attachment_filename": child.get("data", {}).get("filename") or "",
-            })
+        else:
+            child_data = child.get("data", {})
+            child_key = child_data.get("key") or child.get("key") or ""
+            if not is_valid_zotero_key(child_key):
+                invalid_attachment_keys.append({
+                    **row,
+                    "output": str(output),
+                    "attachment_key": child_key,
+                    "attachment_title": child_data.get("title") or "",
+                    "attachment_filename": child_data.get("filename") or "",
+                })
+            if not title_matches_item(row, child):
+                title_mismatches.append({
+                    **row,
+                    "output": str(output),
+                    "attachment_title": child_data.get("title") or "",
+                    "attachment_filename": child_data.get("filename") or "",
+                })
         verified.append({**row, "output": str(output), "side_scores": scores})
     return {
         "items": len(rows),
@@ -427,10 +444,12 @@ def verify_rows(args, rows):
         "missing_outputs": len(missing_outputs),
         "missing_attachments": len(missing_attachments),
         "title_mismatches": len(title_mismatches),
+        "invalid_attachment_keys": len(invalid_attachment_keys),
         "bad_layout": len(bad_layout),
         "missing_output_examples": missing_outputs[:5],
         "missing_attachment_examples": missing_attachments[:5],
         "title_mismatch_examples": title_mismatches[:5],
+        "invalid_attachment_key_examples": invalid_attachment_keys[:5],
         "bad_layout_examples": bad_layout[:5],
     }
 
@@ -566,6 +585,7 @@ def main():
             1 if summary["missing_outputs"]
             or summary["missing_attachments"]
             or summary["title_mismatches"]
+            or summary["invalid_attachment_keys"]
             or summary["bad_layout"]
             else 0
         )
